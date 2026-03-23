@@ -7,7 +7,7 @@ const RPC_URL = process.env.POLYGON_RPC_URL;
 const TARGET_WALLET = process.env.TARGET_WALLET.toLowerCase();
 
 const bot = new TelegramBot(TOKEN);
-const provider = new ethers.JsonRpcProvider(RPC_URL);
+const provider = new ethers.WebSocketProvider(RPC_URL);
 
 const EXCHANGES = [
     { name: "Standard", address: "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E" },
