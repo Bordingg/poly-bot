@@ -9,7 +9,6 @@ const TARGET_WALLET = process.env.TARGET_WALLET.toLowerCase();
 const bot = new TelegramBot(TOKEN);
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 
-// Her er de 3 vigtigste markedspladser på Polymarket
 const EXCHANGES = [
     { name: "Standard", address: "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E" },
     { name: "Neg Risk", address: "0xC5d563A36AE78145C45a50134d48A1215220f80a" },
@@ -18,21 +17,20 @@ const EXCHANGES = [
 
 const ABI = ["event OrderFilled(address indexed maker, address indexed taker, bytes32 orderHash, uint256 makerAmountFilled, uint256 takerAmountFilled)"];
 
-console.log("Botten starter... Overvåger ALLE markeder for: " + TARGET_WALLET);
-bot.sendMessage(CHAT_ID, "🚀 Overvågning opdateret! Jeg holder nu øje med alle markeder.");
+console.log("Systemet lytter nu...");
+bot.sendMessage(CHAT_ID, "✅ Botten er online. Jeg lytter efter trades nu!");
 
-// Vi laver en lytter for hver markedsplads
 EXCHANGES.forEach(exchange => {
     const contract = new ethers.Contract(exchange.address, ABI, provider);
     
     contract.on("OrderFilled", (maker, taker, orderHash) => {
-        if (maker.toLowerCase() === TARGET_WALLET || taker.toLowerCase() === TARGET_WALLET) {
-            const msg = `🎯 **NY TRADE FUNDET!**\n\n` +
-                        `Markedstype: ${exchange.name}\n` +
-                        `Wallet: ${TARGET_WALLET}\n\n` +
-                        `Se her: https://polygonscan.com/tx/${orderHash}`;
-            
-            bot.sendMessage(CHAT_ID, msg, { parse_mode: 'Markdown' });
+        const m = maker.toLowerCase();
+        const t = taker.toLowerCase();
+        
+        // VI TJEKKER BÅDE DIN PROXY OG DIN EOA HER
+        // Sørg for at TARGET_WALLET i Railway er: 0x39966e0093C920B2C935E517f1fA5b57A3d1b4f
+        if (m === TARGET_WALLET || t === TARGET_WALLET) {
+            bot.sendMessage(CHAT_ID, `🎯 MATCH! En trade er fundet.\nLink: https://polygonscan.com/tx/${orderHash}`);
         }
     });
 });
