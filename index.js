@@ -5,41 +5,36 @@ const TOKEN = process.env.TELEGRAM_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const RPC_URL = process.env.POLYGON_RPC_URL;
 
-// DIN RIGTIGE ADRESSE FRA BILLEDET
-const MY_ADDRESS = "0x7210DD22a1461e6F44701d3d97f4A9f452B144E1".toLowerCase();
+// Den store "motor"-adresse (Relayeren)
+const RELAYER_ADDRESS = "0x7210DD22a1461e6F44701d3d97f4A9f452B144E1".toLowerCase();
+// DIN personlige konto-ID (Proxyen)
+const MY_PROXY = "0x39966e0093C920B2C935E517f1fA5b57A3d1b4f".toLowerCase();
 
 const bot = new TelegramBot(TOKEN);
 const provider = new ethers.WebSocketProvider(RPC_URL);
 
-console.log("Starter overvågning af aktiv adresse...");
+console.log("Starter præcisions-overvågning...");
+bot.sendMessage(CHAT_ID, "🎯 Botten er nu fintunet! Jeg lytter kun efter dine egne handler nu.");
 
-bot.sendMessage(CHAT_ID, "🚀 BOT ER LIVE! Overvåger nu din aktive wallet: " + MY_ADDRESS);
-
-// Vi lytter på transaktioner fra din adresse
 provider.on("pending", async (txHash) => {
     try {
         const tx = await provider.getTransaction(txHash);
         
-        if (tx && tx.from.toLowerCase() === MY_ADDRESS) {
-            const msg = `🎯 **POLYMARKET HANDEL DETEKTERET!**\n\n` +
-                        `Din wallet har lige udført en transaktion.\n\n` +
-                        `Se detaljer her: https://polygonscan.com/tx/${txHash}`;
-            
-            bot.sendMessage(CHAT_ID, msg);
+        // TJEK 1: Kommer transaktionen fra motoren?
+        // TJEK 2: Indeholder transaktionens data DIN unikke adresse?
+        if (tx && tx.from.toLowerCase() === RELAYER_ADDRESS) {
+            if (tx.data.toLowerCase().includes(MY_PROXY.replace("0x", ""))) {
+                
+                const msg = `💰 **DIN HANDEL ER REGISTRERET!**\n\n` +
+                            `Jeg har fundet din specifikke handel i mængden.\n\n` +
+                            `Se transaktion: https://polygonscan.com/tx/${txHash}`;
+                
+                bot.sendMessage(CHAT_ID, msg);
+            }
         }
     } catch (e) {
-        // Ignorer midlertidige netværksfejl
+        // Fejl ignoreres for at holde botten kørende
     }
 });
 
-// Sikkerhedsnet: Lytter også på bekræftede blokke
-provider.on("block", async (blockNumber) => {
-    const block = await provider.getBlock(blockNumber, true);
-    for (const tx of block.transactions) {
-        if (tx.from.toLowerCase() === MY_ADDRESS) {
-            bot.sendMessage(CHAT_ID, `✅ **HANDEL BEKRÆFTET PÅ BLOCKCHAIN!**\n\nTX: https://polygonscan.com/tx/${tx.hash}`);
-        }
-    }
-});
-
-provider.on("error", (e) => console.log("WSS Fejl:", e));
+provider.on("error", (e) => console.log("WSS Netværksfejl:", e));
