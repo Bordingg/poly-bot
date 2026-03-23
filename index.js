@@ -4,48 +4,35 @@ const TelegramBot = require('node-telegram-bot-api');
 const TOKEN = process.env.TELEGRAM_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const RPC_URL = process.env.POLYGON_RPC_URL;
-const TARGET_WALLET = process.env.TARGET_WALLET.toLowerCase();
+const TARGET = process.env.TARGET_WALLET.toLowerCase();
 
 const bot = new TelegramBot(TOKEN);
-// Vi bruger WebSocketProvider til live overvågning
 const provider = new ethers.WebSocketProvider(RPC_URL);
 
-const EXCHANGES = [
-    { name: "Standard", address: "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E" },
-    { name: "Neg Risk", address: "0xC5d563A36AE78145C45a50134d48A1215220f80a" },
-    { name: "CTF Exchange", address: "0x4bFbE613D23355A48f4E9A65817d23f03b86E6c6" }
-];
+// USDC Token kontrakt adresse på Polygon
+const USDC_ADDRESS = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
+const USDC_ABI = ["event Transfer(address indexed from, address indexed to, uint256 value)"];
 
-const ABI = ["event OrderFilled(address indexed maker, address indexed taker, bytes32 orderHash, uint256 makerAmountFilled, uint256 takerAmountFilled)"];
+console.log("Starter global USDC-overvågning...");
+bot.sendMessage(CHAT_ID, "💰 Botten overvåger nu alle dine penge-bevægelser (USDC) på: " + TARGET);
 
-console.log("Botten starter op...");
+const contract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider);
 
-// En simpel start-besked så vi ved den kører
-bot.sendMessage(CHAT_ID, "🚀 Botten er nu LIVE og overvåger: " + TARGET_WALLET);
+contract.on("Transfer", (from, to, value, event) => {
+    const fromAddr = from.toLowerCase();
+    const toAddr = to.toLowerCase();
 
-EXCHANGES.forEach(exchange => {
-    try {
-        const contract = new ethers.Contract(exchange.address, ABI, provider);
+    if (fromAddr === TARGET || toAddr === TARGET) {
+        const amount = Number(value) / 1000000; // USDC har 6 decimaler
+        const type = fromAddr === TARGET ? "📉 Du har KØBT eller SENDT" : "📈 Du har MODTAGET eller SOLGT";
         
-        contract.on("OrderFilled", (maker, taker, orderHash) => {
-            const m = maker.toLowerCase();
-            const t = taker.toLowerCase();
-            
-            if (m === TARGET_WALLET || t === TARGET_WALLET) {
-                const msg = `🎯 **NY TRADE FUNDET!**\n\n` +
-                            `Marked: ${exchange.name}\n` +
-                            `Wallet: ${TARGET_WALLET}\n\n` +
-                            `Se transaktion: https://polygonscan.com/tx/${orderHash}`;
-                
-                bot.sendMessage(CHAT_ID, msg, { parse_mode: 'Markdown' });
-            }
-        });
-    } catch (err) {
-        console.error("Fejl ved opsætning af exchange: " + exchange.name, err);
+        const msg = `💰 **NY BEVÆGELSE FUNDET!**\n\n` +
+                    `Type: ${type}\n` +
+                    `Beløb: $${amount.toFixed(2)}\n\n` +
+                    `Se her: https://polygonscan.com/tx/${event.log.transactionHash}`;
+        
+        bot.sendMessage(CHAT_ID, msg);
     }
 });
 
-// Simpel fejlhåndtering for at undgå crash
-provider.on("error", (error) => {
-    console.error("Provider fejl:", error);
-});
+provider.on("error", (e) => console.log("Provider fejl:", e));
