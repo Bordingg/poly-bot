@@ -5,29 +5,46 @@ const TOKEN = process.env.TELEGRAM_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const RPC_URL = process.env.POLYGON_RPC_URL;
 
-// VI OVERVÅGER BEGGE DINE ADRESSER HER
-const ADRESSE_1 = "0x39966e0093C920B2C935E517f1fA5b57A3d1b4f".toLowerCase();
-const ADRESSE_2 = "0x7210DD22a1461e6F44701d3d97f4A9f452B144E1".toLowerCase();
+// Dine to adresser
+const MY_WALLETS = [
+    "0x39966e0093C920B2C935E517f1fA5b57A3d1b4f".toLowerCase(),
+    "0x7210DD22a1461e6F44701d3d97f4A9f452B144E1".toLowerCase()
+];
 
 const bot = new TelegramBot(TOKEN);
 const provider = new ethers.WebSocketProvider(RPC_URL);
 
-const USDC_ADDRESS = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
-const USDC_ABI = ["event Transfer(address indexed from, address indexed to, uint256 value)"];
+// Polymarkets hoved-kontrakter
+const CONTRACTS = [
+    { name: "CTF Exchange", addr: "0x4bFbE613D23355A48f4E9A65817d23f03b86E6c6" },
+    { name: "Neg Risk Adapter", addr: "0xC5d563A36AE78145C45a50134d48A1215220f80a" }
+];
 
-console.log("Dobbelt-overvågning starter...");
-bot.sendMessage(CHAT_ID, "🛡️ Dobbelt-overvågning aktiveret!\n\nJeg holder øje med både din Proxy og din EOA nu.");
+// Vi lytter efter 'OrderFilled'
+const ABI = ["event OrderFilled(address indexed maker, address indexed taker, bytes32 orderHash, uint256 makerAmountFilled, uint256 takerAmountFilled)"];
 
-const contract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider);
+console.log("Starter Polymarket Special-overvågning...");
+bot.sendMessage(CHAT_ID, "🔍 Nu overvåger jeg Polymarkets egne handels-kontrakter direkte!");
 
-contract.on("Transfer", (from, to, value, event) => {
-    const f = from.toLowerCase();
-    const t = to.toLowerCase();
+CONTRACTS.forEach(c => {
+    const contract = new ethers.Contract(c.addr, ABI, provider);
+    
+    contract.on("OrderFilled", (maker, taker, orderHash, makerAmt, takerAmt, event) => {
+        const m = maker.toLowerCase();
+        const t = taker.toLowerCase();
 
-    if (f === ADRESSE_1 || t === ADRESSE_1 || f === ADRESSE_2 || t === ADRESSE_2) {
-        const amount = Number(value) / 1000000;
-        bot.sendMessage(CHAT_ID, `💰 **BEVÆGELSE DETEKTERET!**\n\nBeløb: $${amount.toFixed(2)}\nTX: https://polygonscan.com/tx/${event.log.transactionHash}`);
-    }
+        // Hvis en af dine wallets er involveret
+        if (MY_WALLETS.includes(m) || MY_WALLETS.includes(t)) {
+            const side = MY_WALLETS.includes(t) ? "KØBT" : "SOLGT";
+            
+            const msg = `🎯 **NY POLYMARKET TRADE!**\n\n` +
+                        `Handling: ${side}\n` +
+                        `Kontrakt: ${c.name}\n\n` +
+                        `Se transaktion: https://polygonscan.com/tx/${event.log.transactionHash}`;
+            
+            bot.sendMessage(CHAT_ID, msg);
+        }
+    });
 });
 
-provider.on("error", (e) => console.log("Provider fejl:", e));
+provider.on("error", (e) => console.log("WSS Fejl:", e));
