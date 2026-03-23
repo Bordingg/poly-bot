@@ -4,32 +4,27 @@ const TelegramBot = require('node-telegram-bot-api');
 const TOKEN = process.env.TELEGRAM_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const RPC_URL = process.env.POLYGON_RPC_URL;
-
-// Vi definerer adressen her og tvinger den til små bogstaver med det samme
-const rawAddress = "0x39966e0093C920B2C935E517f1fA5b57A3d1b4f".toLowerCase();
+const TARGET = "0x39966e0093C920B2C935E517f1fA5b57A3d1b4f".toLowerCase();
 
 const bot = new TelegramBot(TOKEN);
 const provider = new ethers.WebSocketProvider(RPC_URL);
 
-console.log("Starter skudsikker overvågning...");
+// Vi lytter KUN på USDC-kontrakten - det elsker Alchemy
+const USDC_ADDRESS = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
+const USDC_ABI = ["event Transfer(address indexed from, address indexed to, uint256 value)"];
 
-// Vi bygger filteret manuelt uden at bruge drilske hjælpefunktioner
-const filter = {
-    topics: [
-        ethers.id("Transfer(address,address,uint256)"),
-        null,
-        "0x000000000000000000000000" + rawAddress.replace("0x", "")
-    ]
-};
+console.log("Starter USDC-specifik overvågning...");
 
-bot.sendMessage(CHAT_ID, "🛡️ Botten er nu i 'Safe Mode' og overvåger: " + rawAddress);
+const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider);
 
-provider.on(filter, (log) => {
-    try {
-        const txHash = log.transactionHash;
-        bot.sendMessage(CHAT_ID, `🎯 **HANDEL FUNDET!**\n\nDer er aktivitet på din Polymarket-konto.\nSe her: https://polygonscan.com/tx/${txHash}`);
-    } catch (e) {
-        console.error("Kunne ikke sende besked:", e);
+bot.sendMessage(CHAT_ID, "✅ Botten er online! Jeg overvåger nu alle USDC-bevægelser for: " + TARGET);
+
+// Vi lytter efter når du modtager penge (køb af aktier/salg)
+usdcContract.on("Transfer", (from, to, value, event) => {
+    if (to.toLowerCase() === TARGET || from.toLowerCase() === TARGET) {
+        const amount = Number(value) / 1000000;
+        const msg = `💰 **USDC BEVÆGELSE DETEKTERET!**\n\nBeløb: $${amount.toFixed(2)}\nTX: https://polygonscan.com/tx/${event.log.transactionHash}`;
+        bot.sendMessage(CHAT_ID, msg);
     }
 });
 
