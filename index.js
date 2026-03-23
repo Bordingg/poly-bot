@@ -9,23 +9,22 @@ const TARGET = "0x39966e0093C920B2C935E517f1fA5b57A3d1b4f".toLowerCase();
 const bot = new TelegramBot(TOKEN);
 const provider = new ethers.WebSocketProvider(RPC_URL);
 
-// Vi lytter KUN på USDC-kontrakten - det elsker Alchemy
-const USDC_ADDRESS = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
-const USDC_ABI = ["event Transfer(address indexed from, address indexed to, uint256 value)"];
+// Polymarkets "Hjerte" - her bor alle aktier (Conditional Tokens)
+const CTF_ADDRESS = "0x2713101e4E9f03635C2B3E691656CB5CD27dfD71";
+const CTF_ABI = ["event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value)"];
 
-console.log("Starter USDC-specifik overvågning...");
+console.log("Overvåger Polymarket Shares...");
 
-const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider);
+const ctfContract = new ethers.Contract(CTF_ADDRESS, CTF_ABI, provider);
 
-bot.sendMessage(CHAT_ID, "✅ Botten er online! Jeg overvåger nu alle USDC-bevægelser for: " + TARGET);
+bot.sendMessage(CHAT_ID, "🎯 Nu overvåger jeg dine Polymarket-AKTIER direkte for: " + TARGET);
 
-// Vi lytter efter når du modtager penge (køb af aktier/salg)
-usdcContract.on("Transfer", (from, to, value, event) => {
+ctfContract.on("TransferSingle", (operator, from, to, id, value, event) => {
     if (to.toLowerCase() === TARGET || from.toLowerCase() === TARGET) {
-        const amount = Number(value) / 1000000;
-        const msg = `💰 **USDC BEVÆGELSE DETEKTERET!**\n\nBeløb: $${amount.toFixed(2)}\nTX: https://polygonscan.com/tx/${event.log.transactionHash}`;
+        const type = to.toLowerCase() === TARGET ? "KØBT" : "SOLGT";
+        const msg = `🎭 **POLYMARKET TRADE DETEKTERET!**\n\nHandling: ${type}\nAntal shares: ${value.toString()}\n\nSe her: https://polygonscan.com/tx/${event.log.transactionHash}`;
         bot.sendMessage(CHAT_ID, msg);
     }
 });
 
-provider.on("error", (e) => console.log("WSS Netværksfejl:", e));
+provider.on("error", (e) => console.log("WSS Fejl:", e));
