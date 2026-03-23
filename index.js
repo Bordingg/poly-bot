@@ -15,6 +15,7 @@ const CTF_EXCHANGE = "0x4bFbE613D23355A48f4E9A65817d23f03b86E6c6";
 const ABI = ["event OrderFilled(address indexed maker, address indexed taker, bytes32 orderHash, uint256 makerAmountFilled, uint256 takerAmountFilled)"];
 
 const contract = new ethers.Contract(CTF_EXCHANGE, ABI, provider);
+bot.sendMessage(CHAT_ID, "Test: Botten er nu online og forbundet til din Telegram!");
 
 console.log("Botten starter... Overvåger " + TARGET_WALLET);
 
