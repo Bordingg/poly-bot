@@ -7,7 +7,7 @@ const RPC_URL = process.env.POLYGON_RPC_URL;
 const TARGET_WALLET = process.env.TARGET_WALLET.toLowerCase();
 
 const bot = new TelegramBot(TOKEN);
-// VIGTIGT: Vi bruger WebSocketProvider her
+// Vi bruger WebSocketProvider til live overvågning
 const provider = new ethers.WebSocketProvider(RPC_URL);
 
 const EXCHANGES = [
@@ -16,32 +16,36 @@ const EXCHANGES = [
     { name: "CTF Exchange", address: "0x4bFbE613D23355A48f4E9A65817d23f03b86E6c6" }
 ];
 
-// Forenklet ABI - vi lytter bare efter adresserne
 const ABI = ["event OrderFilled(address indexed maker, address indexed taker, bytes32 orderHash, uint256 makerAmountFilled, uint256 takerAmountFilled)"];
 
-console.log("Botten lytter nu live via WSS...");
-bot.sendMessage(CHAT_ID, "📡 LIVE: Jeg lytter nu via WebSockets på: " + TARGET_WALLET);
+console.log("Botten starter op...");
+
+// En simpel start-besked så vi ved den kører
+bot.sendMessage(CHAT_ID, "🚀 Botten er nu LIVE og overvåger: " + TARGET_WALLET);
 
 EXCHANGES.forEach(exchange => {
-    const contract = new ethers.Contract(exchange.address, ABI, provider);
-    
-    contract.on("OrderFilled", (maker, taker, orderHash) => {
-        console.log("Trade opdaget på blockchainen..."); // Dette ses i Railway logs
+    try {
+        const contract = new ethers.Contract(exchange.address, ABI, provider);
         
-        const isMaker = maker.toLowerCase() === TARGET_WALLET;
-        const isTaker = taker.toLowerCase() === TARGET_WALLET;
-
-        if (isMaker || isTaker) {
-            const msg = `🎯 **NY TRADE FUNDET!**\n\n` +
-                        `Marked: ${exchange.name}\n` +
-                        `Rolle: ${isMaker ? "Sælger (Maker)" : "Køber (Taker)"}\n\n` +
-                        `Se her: https://polygonscan.com/tx/${orderHash}`;
+        contract.on("OrderFilled", (maker, taker, orderHash) => {
+            const m = maker.toLowerCase();
+            const t = taker.toLowerCase();
             
-            bot.sendMessage(CHAT_ID, msg, { parse_mode: 'Markdown' });
-        }
-    });
+            if (m === TARGET_WALLET || t === TARGET_WALLET) {
+                const msg = `🎯 **NY TRADE FUNDET!**\n\n` +
+                            `Marked: ${exchange.name}\n` +
+                            `Wallet: ${TARGET_WALLET}\n\n` +
+                            `Se transaktion: https://polygonscan.com/tx/${orderHash}`;
+                
+                bot.sendMessage(CHAT_ID, msg, { parse_mode: 'Markdown' });
+            }
+        });
+    } catch (err) {
+        console.error("Fejl ved opsætning af exchange: " + exchange.name, err);
+    }
 });
 
-// Fejlhåndtering hvis forbindelsen ryger
-provider._websocket.on("error", (e) => console.error("WSS Fejl:", e));
-provider._websocket.on("close", () => console.log("WSS Forbindelse lukket"));
+// Simpel fejlhåndtering for at undgå crash
+provider.on("error", (error) => {
+    console.error("Provider fejl:", error);
+});
