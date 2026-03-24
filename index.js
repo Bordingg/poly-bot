@@ -5,7 +5,7 @@ const TOKEN = process.env.TELEGRAM_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const RPC_URL = process.env.POLYGON_RPC_URL;
 
-// --- DINE UDVALGTE WALLETS ---
+// --- DINE WALLETS ---
 const WATCHLIST = {
     "0x4b59e178095b9bb5ba97598244f2ca8b02fc3aa6": "Humbleboy",
     "0xce0871a82a7799ace36ab2fcd08f95b21cdf510b": "Tak",
@@ -14,37 +14,27 @@ const WATCHLIST = {
 
 const bot = new TelegramBot(TOKEN);
 const provider = new ethers.WebSocketProvider(RPC_URL);
-
-// Vi laver en liste over de rå adresser til filteret (små bogstaver for sikkerhed)
 const addresses = Object.keys(WATCHLIST).map(addr => addr.toLowerCase());
 
-console.log("Multi-overvågning starter for Humbleboy, Tak og Gd0...");
+console.log("Multi-overvågning kører...");
+bot.sendMessage(CHAT_ID, "✅ **Botten er klar og overvåger dine 3 profiler.**");
 
-// Send opstartsbesked til Telegram
-bot.sendMessage(CHAT_ID, `🚀 **Multi-Bot Online!**\n\nJeg overvåger nu:\n1. 🦈 **Humbleboy**\n2. 🐋 **Tak**\n3. 🐬 **Gd0**\n\n*Jeg sender besked så snart de rører på sig!*`, { parse_mode: 'Markdown' });
-
-// Filter der lytter efter alle 3 adresser i blockchainens logs
 const filter = {
     address: null, 
-    topics: [
-        null, 
-        addresses.map(addr => ethers.zeroPadValue(addr, 32))
-    ]
+    topics: [null, addresses.map(addr => ethers.zeroPadValue(addr, 32))]
 };
 
 provider.on(filter, async (log) => {
     try {
         const txHash = log.transactionHash;
-        
-        // Find ud af hvilken wallet der handlede ved at matche loggen
         const foundAddress = addresses.find(addr => 
             log.topics.some(topic => topic.toLowerCase().includes(addr.replace("0x", "")))
         );
 
-        const nickname = WATCHLIST[foundAddress] || "Ukendt Wallet";
+        const nickname = WATCHLIST[foundAddress] || "Ukendt";
         const receipt = await provider.getTransactionReceipt(txHash);
 
-        // Find USDC beløb (6 decimaler)
+        // Find USDC beløb
         let amount = "Beregner...";
         const usdcLog = receipt.logs.find(l => l.address.toLowerCase() === "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359");
         if (usdcLog) {
@@ -54,27 +44,24 @@ provider.on(filter, async (log) => {
             } catch (err) { amount = "Variabel"; }
         }
 
+        // --- DIT NYE DESIGN ---
         const message = `
-🔔 **NY HANDEL DETEKTERET!**
+💸 **SPIL FRA ${nickname.toUpperCase()}!**
 
-👤 **Navn:** \`${nickname}\`
-💰 **Indsats:** $${amount}
-📍 **Wallet:** \`${foundAddress}\`
+💵 **Beløb:** $${amount}
+📈 [Åbn hans profil her](https://polymarket.com/profile/${foundAddress})
 
-🔗 **Links:**
-• [Se Profil på Polymarket](https://polymarket.com/profile/${foundAddress})
-• [Se Transaktion på Polygonscan](https://polygonscan.com/tx/${txHash})
+🔗 [Se transaktion på Polygonscan](https://polygonscan.com/tx/${txHash})
         `;
 
-        bot.sendMessage(CHAT_ID, message, { parse_mode: 'Markdown' });
+        bot.sendMessage(CHAT_ID, message, { 
+            parse_mode: 'Markdown',
+            disable_web_page_preview: true // Gør beskeden mere kompakt
+        });
 
     } catch (e) {
-        console.error("Fejl i log-behandling:", e);
+        console.error("Fejl:", e);
     }
 });
 
-// Genstart ved netværksfejl
-provider.on("error", (e) => {
-    console.log("Forbindelse tabt - genstarter om 5 sekunder...");
-    setTimeout(() => process.exit(1), 5000);
-});
+provider.on("error", () => setTimeout(() => process.exit(1), 5000));
