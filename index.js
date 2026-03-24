@@ -16,25 +16,21 @@ const bot = new TelegramBot(TOKEN);
 const provider = new ethers.WebSocketProvider(RPC_URL);
 const addresses = Object.keys(WATCHLIST).map(addr => addr.toLowerCase());
 
-console.log("🚀 Haj-Tracker v2.0 er startet...");
-bot.sendMessage(CHAT_ID, "✅ **Haj-Tracker v2.0 er LIVE!**\nJeg henter nu spil-titler og præcise beløb.");
-
-// Funktion der spørger Polymarket API om den seneste handel
-async function getTradeDetails(wallet) {
-    try {
-        // Vi henter historikken for brugeren fra Polymarkets Gamma API
-        const response = await axios.get(`https://gamma-api.polymarket.com/history?user=${wallet}&limit=1`);
-        if (response.data && response.data.length > 0) {
-            const trade = response.data[0];
-            return {
-                title: trade.title || "Ukendt væddemål",
-                amount: parseFloat(trade.usdSize).toFixed(2),
-                side: trade.side === "BUY" ? "KØBT" : "SOLGT",
-                outcome: trade.outcome || ""
-            };
+// Funktion til at hente detaljer med "Retry" (forsøger op til 3 gange)
+async function fetchWithRetry(wallet, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await axios.get(`https://gamma-api.polymarket.com/history?user=${wallet}&limit=1`);
+            if (response.data && response.data.length > 0) {
+                const trade = response.data[0];
+                // Tjek om handlen er helt ny (inden for de sidste 2 minutter)
+                return trade;
+            }
+        } catch (e) {
+            console.log(`Forsøg ${i+1} fejlede...`);
         }
-    } catch (error) {
-        console.error("API fejl:", error.message);
+        // Vent 5 sekunder mere før næste forsøg
+        await new Promise(resolve => setTimeout(resolve, 5000));
     }
     return null;
 }
@@ -46,40 +42,40 @@ const filter = {
 
 provider.on(filter, async (log) => {
     try {
+        const txHash = log.transactionHash;
         const foundAddress = addresses.find(addr => 
             log.topics.some(topic => topic.toLowerCase().includes(addr.replace("0x", "")))
         );
         const nickname = WATCHLIST[foundAddress];
 
-        // Vi venter 5 sekunder før vi spørger API'et, så deres database når at opdatere
-        setTimeout(async () => {
-            const details = await getTradeDetails(foundAddress);
+        // Start detektiven
+        const trade = await fetchWithRetry(foundAddress);
+        
+        let message;
+        if (trade) {
+            const side = trade.side === "BUY" ? "KØBT" : "SOLGT";
+            const amount = parseFloat(trade.usdSize).toFixed(2);
             
-            let message;
-            if (details) {
-                // Her er dit ønskede pæne format:
-                message = `
+            message = `
 💸 **SPIL FRA ${nickname.toUpperCase()}!**
 
-🗳️ **Væddemål:** _${details.title}_
-💵 **Beløb:** $${details.amount} (${details.side} ${details.outcome})
+🗳️ **Væddemål:** _${trade.title}_
+💵 **Beløb:** $${amount} (${side} ${trade.outcome})
 
 📈 [Åbn hans profil her](https://polymarket.com/profile/${foundAddress})
-                `;
-            } else {
-                message = `
-💸 **AKTIVITET FRA ${nickname.toUpperCase()}!**
-_Handlen er registreret, men detaljer er ikke klar endnu._
+🔗 [Se transaktion](https://polygonscan.com/tx/${txHash})
+            `;
+        } else {
+            // Hvis alt fejler, giv i det mindste linket med det samme
+            message = `
+⚠️ **NY AKTIVITET FRA ${nickname.toUpperCase()}**
+_Kunne ikke hente spildetaljer automatisk efter 15 sekunder._
 
-📈 [Se profil her](https://polymarket.com/profile/${foundAddress})
-                `;
-            }
+📈 [Tjek profilen manuelt her](https://polymarket.com/profile/${foundAddress})
+            `;
+        }
 
-            bot.sendMessage(CHAT_ID, message, { 
-                parse_mode: 'Markdown', 
-                disable_web_page_preview: true 
-            });
-        }, 5000);
+        bot.sendMessage(CHAT_ID, message, { parse_mode: 'Markdown', disable_web_page_preview: true });
 
     } catch (e) {
         console.error("Fejl:", e);
