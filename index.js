@@ -10,7 +10,9 @@ const TARGET_ADDRESS = "0x4b59e178095b9bb5ba97598244f2ca8b02fc3aa6".toLowerCase(
 const bot = new TelegramBot(TOKEN);
 const provider = new ethers.WebSocketProvider(RPC_URL);
 
-console.log("Præcisions-overvågning kører...");
+// --- VELKOMSTBESKED ---
+console.log("Præcisions-overvågning starter...");
+bot.sendMessage(CHAT_ID, `✅ **Botten er online og fintunet!**\n\nJeg holder øje med alt hvad denne adresse foretager sig:\n\`${TARGET_ADDRESS}\``, { parse_mode: 'Markdown' });
 
 const filter = {
     address: null, 
@@ -21,33 +23,39 @@ provider.on(filter, async (log) => {
     try {
         const txHash = log.transactionHash;
         
-        // Vi henter transaktionen for at se detaljer
+        // Henter detaljer om transaktionen
         const tx = await provider.getTransaction(txHash);
         const receipt = await provider.getTransactionReceipt(txHash);
 
-        // Forsøg på at finde beløbet (USDC har 6 decimaler)
-        // Vi kigger efter Transfer-events i samme transaktion
-        let amount = "Ukendt";
+        // Forsøg på at finde USDC beløb (6 decimaler)
+        let amount = "Beregner...";
         const usdcLog = receipt.logs.find(l => l.address.toLowerCase() === "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359");
         if (usdcLog) {
-            const rawAmount = ethers.toBigInt(usdcLog.data);
-            amount = (Number(rawAmount) / 1000000).toFixed(2);
+            try {
+                const rawAmount = ethers.toBigInt(usdcLog.data);
+                amount = (Number(rawAmount) / 1000000).toFixed(2);
+            } catch (err) {
+                amount = "Variabel";
+            }
         }
 
         const message = `
 🎯 **DER ER SPIL!**
 
 👤 **Bruger:** \`${TARGET_ADDRESS}\`
-💰 **Anslået beløb:** $${amount}
+💰 **Anslået indsats:** $${amount}
 
-🔗 **Links:**
-• [Se handlen på Polygonscan](https://polygonscan.com/tx/${txHash})
-• [Se hans profil på Polymarket](https://polymarket.com/profile/${TARGET_ADDRESS})
+🔗 **Direkte links:**
+• [Se hans aktive spil her](https://polymarket.com/profile/${TARGET_ADDRESS})
+• [Se de tekniske detaljer på Polygonscan](https://polygonscan.com/tx/${txHash})
 
-*Botten overvåger stadig live...*
+*Jeg holder øje med den næste handel...*
         `;
 
-        bot.sendMessage(CHAT_ID, message, { parse_mode: 'Markdown', disable_web_page_preview: false });
+        bot.sendMessage(CHAT_ID, message, { 
+            parse_mode: 'Markdown', 
+            disable_web_page_preview: false 
+        });
 
     } catch (e) {
         console.error("Fejl i besked-generering:", e);
