@@ -15,8 +15,10 @@ const bot = new TelegramBot(TOKEN);
 const provider = new ethers.WebSocketProvider(RPC_URL);
 const addresses = Object.keys(WATCHLIST).map(addr => addr.toLowerCase());
 
-console.log("Simpel Haj-Tracker kører...");
-bot.sendMessage(CHAT_ID, "✅ **Botten er klar i det simple format!**\nOvervåger Humbleboy, Tak og Gd0.");
+console.log("🚀 Genstarter Haj-Tracker med Keep-Alive...");
+
+// Send besked så du ved den er vågnet
+bot.sendMessage(CHAT_ID, "☀️ **Botten er vågnet og overvåger igen!**");
 
 const filter = {
     address: null, 
@@ -30,7 +32,6 @@ provider.on(filter, (log) => {
         );
         const nickname = WATCHLIST[foundAddress];
 
-        // Det ultra-simple format du bad om:
         const message = `
 💸 **SPIL FRA ${nickname.toUpperCase()}!**
 
@@ -41,10 +42,24 @@ provider.on(filter, (log) => {
             parse_mode: 'Markdown',
             disable_web_page_preview: true 
         });
-
     } catch (e) {
         console.error("Fejl:", e);
     }
 });
 
-provider.on("error", () => setTimeout(() => process.exit(1), 5000));
+// --- KEEP-ALIVE LOGIK ---
+// Vi spørger om blocknummeret hvert 30. sekund for at holde forbindelsen varm
+setInterval(async () => {
+    try {
+        await provider.getBlockNumber();
+        console.log("Ping: Forbindelse er aktiv");
+    } catch (e) {
+        console.error("Forbindelse tabt i ping, genstarter...");
+        process.exit(1);
+    }
+}, 30000);
+
+provider.on("error", (e) => {
+    console.error("Provider fejl:", e);
+    setTimeout(() => process.exit(1), 5000);
+});
