@@ -1,24 +1,33 @@
 const ethers = require('ethers');
 const TelegramBot = require('node-telegram-bot-api');
+const http = require('http');
 
 const TOKEN = process.env.TELEGRAM_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const RPC_URL = process.env.POLYGON_RPC_URL;
 
+// --- DINE WALLETS ---
 const WATCHLIST = {
     "0x4b59e178095b9bb5ba97598244f2ca8b02fc3aa6": "Humbleboy",
     "0xce0871a82a7799ace36ab2fcd08f95b21cdf510b": "Tak",
     "0x26acaab03640f75d3f8b3050eee204af71eba735": "Gd0"
 };
 
+// --- WEB SERVER (Holder Railway vågen) ---
+const server = http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('Bot is running and awake!');
+});
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+    console.log(`Webserver kører på port ${PORT}`);
+});
+
 const bot = new TelegramBot(TOKEN);
 const provider = new ethers.WebSocketProvider(RPC_URL);
 const addresses = Object.keys(WATCHLIST).map(addr => addr.toLowerCase());
 
-console.log("🚀 Genstarter Haj-Tracker med Keep-Alive...");
-
-// Send besked så du ved den er vågnet
-bot.sendMessage(CHAT_ID, "☀️ **Botten er vågnet og overvåger igen!**");
+console.log("🚀 Haj-Tracker 3.0 Online...");
 
 const filter = {
     address: null, 
@@ -31,35 +40,20 @@ provider.on(filter, (log) => {
             log.topics.some(topic => topic.toLowerCase().includes(addr.replace("0x", "")))
         );
         const nickname = WATCHLIST[foundAddress];
-
-        const message = `
-💸 **SPIL FRA ${nickname.toUpperCase()}!**
-
-📈 [Åbn hans profil her](https://polymarket.com/profile/${foundAddress})
-        `;
-
-        bot.sendMessage(CHAT_ID, message, { 
-            parse_mode: 'Markdown',
-            disable_web_page_preview: true 
-        });
-    } catch (e) {
-        console.error("Fejl:", e);
-    }
+        const message = `💸 **SPIL FRA ${nickname.toUpperCase()}!**\n\n📈 [Åbn hans profil her](https://polymarket.com/profile/${foundAddress})`;
+        bot.sendMessage(CHAT_ID, message, { parse_mode: 'Markdown', disable_web_page_preview: true });
+    } catch (e) { console.error("Fejl:", e); }
 });
 
-// --- KEEP-ALIVE LOGIK ---
-// Vi spørger om blocknummeret hvert 30. sekund for at holde forbindelsen varm
+// Keep-alive ping hvert minut
 setInterval(async () => {
     try {
         await provider.getBlockNumber();
-        console.log("Ping: Forbindelse er aktiv");
+        console.log("Ping: OK - " + new Date().toLocaleTimeString());
     } catch (e) {
-        console.error("Forbindelse tabt i ping, genstarter...");
+        console.error("Forbindelse tabt, genstarter...");
         process.exit(1);
     }
-}, 30000);
+}, 60000);
 
-provider.on("error", (e) => {
-    console.error("Provider fejl:", e);
-    setTimeout(() => process.exit(1), 5000);
-});
+provider.on("error", () => setTimeout(() => process.exit(1), 5000));
