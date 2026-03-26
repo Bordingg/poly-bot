@@ -6,13 +6,14 @@ const TOKEN = process.env.TELEGRAM_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const RPC_URL = process.env.POLYGON_RPC_URL;
 
+// --- DINE 4 WALLETS (Jeg har tilføjet den nye her) ---
 const WATCHLIST = {
     "0x4b59e178095b9bb5ba97598244f2ca8b02fc3aa6": "Humbleboy",
     "0xce0871a82a7799ace36ab2fcd08f95b21cdf510b": "Tak",
-    "0x26acaab03640f75d3f8b3050eee204af71eba735": "Gd0"
+    "0x26acaab03640f75d3f8b3050eee204af71eba735": "Gd0",
+    "0xd6e6120c3538399e82c00ce3f02ad8c1a0fe2915": "Hunting10"
 };
 
-// --- HUKOMMELSE TIL SPAM-FILTER ---
 const lastSeenTrade = {}; 
 
 const server = http.createServer((req, res) => {
@@ -24,7 +25,8 @@ const bot = new TelegramBot(TOKEN);
 const provider = new ethers.WebSocketProvider(RPC_URL);
 const addresses = Object.keys(WATCHLIST).map(addr => addr.toLowerCase());
 
-console.log("🚀 Haj-Tracker 3.5 (Spam-filter) Online...");
+console.log("🚀 Haj-Tracker 3.6 (4 Wallets) Online...");
+bot.sendMessage(CHAT_ID, "✅ **Tracker opdateret!**\nJeg holder nu øje med 4 personer.");
 
 const filter = {
     address: null, 
@@ -39,12 +41,11 @@ provider.on(filter, (log) => {
         const nickname = WATCHLIST[foundAddress];
         const now = Date.now();
 
-        // --- SPAM-FILTER LOGIK ---
-        // Hvis denne person har handlet inden for de sidste 5 sekunder, så stop her.
+        // Spam-filter (5 sekunder)
         if (lastSeenTrade[foundAddress] && (now - lastSeenTrade[foundAddress] < 5000)) {
             return; 
         }
-        lastSeenTrade[foundAddress] = now; // Opdater sidst sete tidspunkt
+        lastSeenTrade[foundAddress] = now;
 
         const message = `💸 **SPIL FRA ${nickname.toUpperCase()}!**\n\n📈 [Åbn hans profil her](https://polymarket.com/profile/${foundAddress})`;
         bot.sendMessage(CHAT_ID, message, { parse_mode: 'Markdown', disable_web_page_preview: true });
